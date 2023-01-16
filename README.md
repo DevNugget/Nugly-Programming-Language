@@ -8,6 +8,7 @@ Linux x86_64 Assembly libraries.
 ```
 grab asm<io>
 grab asm<linux64>
+grab asm<generics>
 ```
 
 Stack expressions to organise and re-use.
@@ -33,4 +34,22 @@ entry
   <program body>
 end
 ```
+
+Example program that pushes two items to the stack, adds them and prints them.
+```
+grab asm<io>
+grab asm<linux64>
+grab asm<generics>
+
+stackexpr math
+	3 4 +
+end
+
+entry
+	call math
+	call putI64
+end
+```
+
+
 
