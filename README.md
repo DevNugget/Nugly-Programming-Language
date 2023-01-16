@@ -14,12 +14,12 @@ grab asm<generics>
 Stack expressions to organise and re-use.
 ```
 stackexpr <identifier>
-  <expression>
+	<expression>
 end
 ```
 ```
 stackexpr push_num 
-  10 8 +
+	10 8 +
 end
 ```
 
@@ -31,7 +31,7 @@ call push_num
 An entry point needs to be defined to indicate the start of the main program.
 ```
 entry
-  <program body>
+	<program body>
 end
 ```
 
@@ -51,5 +51,23 @@ entry
 end
 ```
 
+Conditionals.
+```
+<expression> if
+	<body>
+end
+```
+The following program pushes two numbers to the stack and checks whether they are equal, if so it prints "they are equal".
+```
+stackexpr push_num
+	2 2
+end
 
+entry
+	call push_num
+	== if
+		putS invoke " they are equal"
+	end
+end
+```
 
