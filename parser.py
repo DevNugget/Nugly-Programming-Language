@@ -1,4 +1,3 @@
-from lib2to3.pgen2 import token
 from tokenizer import *
 
 out = ""
@@ -22,10 +21,36 @@ def make_error(message, line, suggestion=""):
         print("SUGGESTION: " + suggestion)
     exit(1)
 
+def check_stack_op(token):
+    global out
+    if token == 'dup':
+        out += '\n'
+        out += ';; --- dup ---\n'
+        out += 'pop rax\n'
+        out += 'push rax\n'
+        out += 'push rax\n'
+    elif token == 'swap':
+        out += '\n'
+        out += ';; --- swap ---\n'
+        out += 'pop rax\n'
+        out += 'pop rbx\n'
+        out += 'push rax\n'
+        out += 'push rbx\n'
+    else:
+        make_error(
+            "Stack operation not implemented yet",
+            current_line,
+            "TODO: Wait for release or head to [PUT GITHUB REPO]"
+        )
+    
 def parse(tokens, values):
     global out, current_line, data_section, values_in_stack
 
     ifs = 0
+    whiles = 0
+
+    end_presedence = []
+    
     token_pointer = 0
     entry_closed = True
 
@@ -57,6 +82,24 @@ global _start
                         value = get_value(values, token_pointer, 0)
                         out += 'push ' + value + '\n'
 
+                    elif tok == PLUS_PLUS:
+                        if values_in_stack < 1:
+                            make_error(
+                                "Not enough values in stack to perform operation",
+                                current_line
+                            )
+                        values_in_stack -= 1
+                        tok_one = get_token(tokens, token_pointer, -1)
+                        tok_two = get_token(tokens, token_pointer, -2)
+
+                        out += ';; --- add (plus plus) ---\n'
+                        out += 'pop rax\n'
+                        out += 'mov rbx, 1\n'
+                        out += 'add rax, rbx\n'
+                        out += 'push rax\n'
+                        
+                        values_in_stack += 1
+                        
                     elif tok == ADD_OP:
                         if values_in_stack < 2:
                             make_error(
@@ -128,7 +171,11 @@ global _start
                         out += 'push rax\n'
 
                         values_in_stack += 1 
-                    
+
+                    elif tok == STACK_OP:
+                        value = get_value(values, token_pointer, 0)
+                        check_stack_op(value)
+                        
                     if tok == NEW_LINE:
                         current_line += 1
 
@@ -149,6 +196,7 @@ global _start
             current_line += 1
 
         elif tokens[token_pointer] == ENTRY:
+            end_presedence.append('entry')
             entry_closed = False
             out += '\n'
             out += '_start:\n'
@@ -214,46 +262,112 @@ global _start
                 out += 'cmp rax, rbx\n'
                 out += 'cmove rcx, rdx\n'
                 out += 'push rcx\n'
+
+        elif tokens[token_pointer] == PLUS_PLUS:
+            if values_in_stack < 1:
+                make_error(
+                    "Not enough values in stack to perform operation",
+                    current_line
+                )
+            values_in_stack -= 1
+            tok_one = get_token(tokens, token_pointer, -1)
+            tok_two = get_token(tokens, token_pointer, -2)
+
+            out += ';; --- add (plus plus) ---\n'
+            out += 'pop rax\n'
+            out += 'mov rbx, 1\n'
+            out += 'add rax, rbx\n'
+            out += 'push rax\n'
+                        
+            values_in_stack += 1
                 
         elif tokens[token_pointer] == IF:
+            end_presedence.append('if')
             out += '\n'
             out += ';; --- if ---\n'
             out += 'pop rax\n'
             out += 'test rax, rax\n'
             out += 'jz _else_' + str(ifs) + '\n'
-        
+            
+        elif tokens[token_pointer] == WHILE:
+            end_presedence.append('while')
+            out += '\n'
+            out += '_while_' + str(whiles) + ':\n'
+            out += ';; --- while ---\n'
+
+        elif tokens[token_pointer] == DO:
+            out += '\n'
+            out += ';; --- do ---\n'
+            out += 'pop rax\n'
+            out += 'test rax, rax\n'
+            out += 'jz _else_' + str(ifs) + '\n'
+
         elif tokens[token_pointer] == ENDIF:
             out += '\n'
             out += '_else_' + str(ifs) + ':\n'
             ifs += 1
 
         elif tokens[token_pointer] == END:
-            if entry_closed == False:
+            if entry_closed == False and end_presedence[-1] == 'entry':
                 out += '\n'
                 out += ';; --- exit ---\n'
                 out += "mov rax, SYS_EXIT\n"
                 out += "mov rdi, 0\n"
                 out += "syscall\n"
                 entry_closed = True
+            elif end_presedence[-1] == 'if':
+                end_presedence.pop(-1)
+                out += '\n'
+                out += '_else_' + str(ifs) + ':\n'
+                ifs += 1
+            elif end_presedence[-1] == 'while':
+                end_presedence.pop(-1)
+                out += '\n'
+                out += 'jmp _while_' + str(whiles) + '\n'
+                out += '_else_' + str(ifs) + ':\n'
+                ifs += 1
+                whiles += 1
 
         elif tokens[token_pointer] == STACK_OP:
-            if values[token_pointer] == 'dup':
-                out += '\n'
-                out += ';; --- dup ---'
-            else:
-                make_error(
-                    "Stack operation not implemented yet",
-                    current_line,
-                    "TODO: Wait for release or head to [PUT GITHUB REPO]"
-                )
+            value = get_value(values, token_pointer, 0)
+            check_stack_op(value)
+        
+        elif tokens[token_pointer] == CONST:
+            next_tok = get_token(tokens, token_pointer, 1)
+            next_next_tok = get_token(tokens, token_pointer, 2)
+            if next_tok == IDENTIFIER:
+                identifier = get_value(values, token_pointer, 1)
+                val = get_value(values, token_pointer, 2)
+                if next_next_tok == STRING:
+                    data_section += '   ' + identifier + ' db ' + val + ',0'
+                else:
+                    data_section += '   ' + identifier + ' db ' + val
+
+        elif tokens[token_pointer] == INVOKE:
+            next_tok = get_token(tokens, token_pointer, 1)
+            if next_tok == STRING:
+                string_to_invoke = get_value(values, token_pointer, 1)
+                string_to_invoke = string_to_invoke.removeprefix('"')
+                string_to_invoke = string_to_invoke.removesuffix('"')
+                string_to_invoke = string_to_invoke.removeprefix("'")
+                string_to_invoke = string_to_invoke.removesuffix("'")
+                out += str(string_to_invoke)
                 
+        #elif tokens[token_pointer] == STRING:
+        #    string_val = get_value(values, token_pointer, 0)
+        #    out += 'push"' + string_val + '"\n'
+
         elif tokens[token_pointer] == CALL:
             identifier_token = get_token(tokens, token_pointer, 1)
             if identifier_token == IDENTIFIER:
                 identifier = get_value(values, token_pointer, 1)
+                next_next_tok = get_token(tokens, token_pointer, 2)
                 out += '\n'
                 out += ';; --- call ---\n'
-                out += identifier + '\n'
+                if next_next_tok != INVOKE:
+                    out += identifier + '\n'
+                else:
+                    out += identifier
             else:
                 make_error(
                     "Call statement must have an identifier",
@@ -278,7 +392,82 @@ global _start
                     current_line,
                     "Please provide a library after include\nThere is also a chance that the library type is not yet supported"
                 )
+        elif tokens[token_pointer] == INT:
+            values_in_stack += 1
+            value = get_value(values, token_pointer, 0)
+            out += 'push ' + value + '\n'
 
+        elif tokens[token_pointer] == ADD_OP:
+            if values_in_stack < 2:
+                make_error(
+                    "Not enough values in stack to perform operation",
+                    current_line
+                )
+            values_in_stack -= 2
+            tok_one = get_token(tokens, token_pointer, -1)
+            tok_two = get_token(tokens, token_pointer, -2)
+
+            out += ';; --- add ---\n'
+            out += 'pop rax\n'
+            out += 'pop rbx\n'
+            out += 'add rax, rbx\n'
+            out += 'push rax\n'
+                    
+            values_in_stack += 1
+
+        elif tokens[token_pointer] == SUB_OP:
+            if values_in_stack < 2:
+                make_error(
+                    "Not enough values in stack to perform operation",
+                    current_line
+                )
+            values_in_stack -= 2
+            tok_one = get_token(tokens, token_pointer, -1)
+            tok_two = get_token(tokens, token_pointer, -2)
+            
+            out += ';; --- sub ---\n'
+            out += 'pop rbx\n'
+            out += 'pop rax\n'
+            out += 'sub rax, rbx\n'
+            out += 'push rax\n'
+
+            values_in_stack += 1 
+
+        elif tokens[token_pointer] == MUL_OP:
+            if values_in_stack < 2:
+                make_error(
+                    "Not enough values in stack to perform operation",
+                    current_line
+                )
+            values_in_stack -= 2
+            tok_one = get_token(tokens, token_pointer, -1)
+            tok_two = get_token(tokens, token_pointer, -2)
+
+            out += ';; --- mul ---\n'
+            out += 'pop rax\n'
+            out += 'pop rbx\n'
+            out += 'imul rbx\n'
+            out += 'push rax\n'
+
+            values_in_stack += 1 
+
+        elif tokens[token_pointer] == DIV_OP:
+            if values_in_stack < 2:
+                make_error(
+                    "Not enough values in stack to perform operation",
+                    current_line
+                )
+            values_in_stack -= 2
+            tok_one = get_token(tokens, token_pointer, -1)
+            tok_two = get_token(tokens, token_pointer, -2)
+
+            out += ';; --- div ---\n'
+            out += 'pop rax\n'
+            out += 'pop rbx\n'
+            out += 'idiv rbx\n'
+            out += 'push rax\n'
+
+            values_in_stack += 1 
         token_pointer += 1
 
     if entry_closed == False:

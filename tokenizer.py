@@ -1,19 +1,27 @@
 import shlex
 
+DISCARD = 'DISCARD'
+
 STRING = 'STRING'
 INT = 'INT'
 
+INVOKE = 'INVOKE'
 CONST = 'CONST'
 
 ENTRY = 'ENTRY'
 STACK_EXPR = 'STACK_EXPR'
 IDENTIFIER = 'IDENTIFIER'
 
+WHILE = 'WHILE'
+DO = 'DO'
+
 ADD_OP = 'ADD_OP'
 SUB_OP = 'SUB_OP'
 MUL_OP = 'MUL_OP'
 DIV_OP = 'DIV_OP'
 STACK_OP = 'STACK_OP'
+
+PLUS_PLUS = 'PLUS_PLUS'
 
 C_BRACE_L = 'C_BRACE_L'
 C_BRACE_R = 'C_BRACE_R'
@@ -58,7 +66,7 @@ def tokenize(file_name):
     numbers = '1234567890'
     idenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
     conditionals = ['>', '<', '>=', '<=', '==', '!=']
-    stack_ops = ['dup']
+    stack_ops = ['dup', 'swap', 'drop']
 
     tokens = []
 
@@ -67,6 +75,8 @@ def tokenize(file_name):
 
     while token_pointer < len(values):
         if values[token_pointer].startswith('"') and values[token_pointer].endswith('"'):
+            tokens.append(STRING)
+        elif values[token_pointer].startswith("'") and values[token_pointer].endswith("'"):
             tokens.append(STRING)
         elif values[token_pointer] == "stackexpr":
             tokens.append(STACK_EXPR)
@@ -95,6 +105,18 @@ def tokenize(file_name):
             tokens.append(ENDIF)
         elif values[token_pointer] in stack_ops:
             tokens.append(STACK_OP)
+        elif values[token_pointer] == 'while':
+            tokens.append(WHILE)
+        elif values[token_pointer] == 'do':
+            tokens.append(DO)
+        elif values[token_pointer] == 'const':
+            tokens.append(CONST)
+        elif values[token_pointer] == 'invoke':
+            tokens.append(INVOKE)
+        elif values[token_pointer] == 'discard':
+            tokens.append(DISCARD)
+        elif values[token_pointer] == '++':
+            tokens.append(PLUS_PLUS)
             
         else:
             for char in values[token_pointer]:
