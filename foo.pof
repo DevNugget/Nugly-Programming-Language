@@ -10,10 +10,10 @@ entry
 	== if
 		 call push_if_output
 		 call putI64
-	endif
+	end
 	call push_num
 	!= if
 		 call push_else_output
 		 call putI64
-	endif
+	end
 end
